@@ -1,0 +1,51 @@
+# Build directories and files
+build/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.sln
+*.suo
+*.user
+*.aps
+*.pch
+*.vs/
+.vscode/
+
+# Executables and binaries
+*.exe
+*.dll
+*.so
+*.dylib
+*.lib
+*.a
+*.o
+*.obj
+
+# Logs and generated files
+*.log
+black_logs.txt
+white_logs.txt
+blacklist.txt
+whitelist.txt
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+*~
+
+# Temporary files
+*.tmp
+*.swp
+*.bak
+
+# IDE and editor files
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Dependencies (if any)
+# Add paths to external libraries if cloned as submodules or downloaded
