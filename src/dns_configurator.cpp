@@ -110,7 +110,7 @@ std::wstring netsh_prefix(bool ipv6) {
 void clear_dns_servers(const std::string& alias, bool ipv6) {
     std::wostringstream cmd;
     std::wstring aliasWide = utf8_to_wstring(alias);
-    cmd << netsh_prefix(ipv6) << L" delete dnsservers " << quote_argument(aliasWide) << L" all";
+    cmd << netsh_prefix(ipv6) << L" delete dnsservers " << quote_argument(aliasWide) << L" all >nul 2>&1";
     _wsystem(cmd.str().c_str());
 }
 
@@ -132,9 +132,7 @@ bool add_dns_servers(const std::string& alias, const std::vector<std::string>& a
             << quote_argument(aliasWide)
             << L" address=" << utf8_to_wstring(entry)
             << L" index=" << index;
-        if (!ipv6) {
-            cmd << L" validate=no";
-        }
+        cmd << L" validate=no";
         int rc = run_netsh_command(cmd.str());
         if (rc != 0) {
             std::cout << "Failed to add DNS server '" << entry << "' to '" << alias << "' (exit code " << rc << ")" << std::endl;
