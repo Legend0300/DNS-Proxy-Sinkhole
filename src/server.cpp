@@ -1,5 +1,6 @@
 #include "server.hpp"
 
+#include "dns_configurator.hpp"
 #include "dns_message.hpp"
 
 #include <algorithm>
@@ -138,6 +139,15 @@ std::string lowercase_copy(std::string value) {
         return static_cast<char>(std::tolower(ch));
     });
     return value;
+}
+
+std::string trim_copy(std::string_view value) {
+    auto begin = value.find_first_not_of(" \t\r\n");
+    if (begin == std::string_view::npos) {
+        return {};
+    }
+    auto end = value.find_last_not_of(" \t\r\n");
+    return std::string(value.substr(begin, end - begin + 1));
 }
 
 } // namespace
@@ -642,6 +652,48 @@ void DnsServer::handle_command(const std::string& line) {
         return;
     }
 
+    if (command == "dns") {
+        std::string actionToken;
+        if (!(stream >> actionToken)) {
+            std::cout << "DNS command requires an action (auto|list|select|set <alias>)." << std::endl;
+            return;
+        }
+        auto action = lowercase_copy(actionToken);
+        if (action == "auto") {
+            configure_default_dns_targets(config_);
+            return;
+        }
+        if (action == "list") {
+            print_dns_interface_list();
+            return;
+        }
+        if (action == "select" || action == "menu") {
+            prompt_dns_interface_selection(config_);
+            return;
+        }
+        if (action == "set") {
+            std::string alias;
+            std::getline(stream, alias);
+            alias = trim_copy(alias);
+            if (alias.empty()) {
+                std::cout << "Specify an interface alias after 'dns set'." << std::endl;
+                return;
+            }
+            configure_dns_for_alias(config_, alias);
+            return;
+        }
+        if (action == "help") {
+            std::cout << "dns commands:" << std::endl;
+            std::cout << "  dns auto          # configure Ethernet/Wi-Fi" << std::endl;
+            std::cout << "  dns list          # list interfaces" << std::endl;
+            std::cout << "  dns select        # interactive selection" << std::endl;
+            std::cout << "  dns set <alias>   # apply to specific alias" << std::endl;
+            return;
+        }
+        std::cout << "Unknown dns action." << std::endl;
+        return;
+    }
+
     if (command == "blacklist" || command == "whitelist") {
         bool isBlacklist = (command == "blacklist");
         std::string actionToken;
@@ -700,6 +752,7 @@ void DnsServer::print_help() const {
     std::cout << "  whitelist add <domain>" << std::endl;
     std::cout << "  whitelist remove <domain>" << std::endl;
     std::cout << "  whitelist list" << std::endl;
+    std::cout << "  dns <auto|list|select|set>" << std::endl;
 }
 
 void DnsServer::list_entries(bool blacklist) const {

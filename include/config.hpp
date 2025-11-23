@@ -27,6 +27,8 @@ struct ServerConfig {
     int socketTimeoutMs = 2000;
     std::string blackLogFile = "black_logs.txt";
     std::string whiteLogFile = "white_logs.txt";
+    std::string dnsAssignIPv4 = "127.0.0.1";
+    std::string dnsAssignIPv6 = "::1";
     std::vector<Upstream> upstreams;
 };
 

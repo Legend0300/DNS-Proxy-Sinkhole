@@ -11,10 +11,11 @@ add_executable(dns_proxy
     src/rules.cpp
     src/dns_message.cpp
     src/server.cpp
+    src/dns_configurator.cpp
 )
 
 target_include_directories(dns_proxy PRIVATE include)
 
 if (WIN32)
-    target_link_libraries(dns_proxy PRIVATE ws2_32)
+    target_link_libraries(dns_proxy PRIVATE ws2_32 iphlpapi)
 endif()

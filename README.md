@@ -16,6 +16,7 @@ The proxy listens on both IPv4 and IPv6, relays queries to upstream resolvers ov
 - Upstream retry strategy with UDP first, TCP fallback, and truncation handling.
 - Cross-platform socket abstraction (Windows Winsock, POSIX sockets).
 - Interactive runtime management of blacklist/whitelist entries with automatic persistence.
+- Windows-specific automation for DNS adapter assignment, including startup prompts and runtime commands.
 
 ## Prerequisites
 
@@ -59,6 +60,8 @@ Common flags:
 - `--upstream <host[:port]>` additional upstream resolver (repeatable)
 - `--port <number>` listening port (default 53)
 - `--timeout-ms <ms>` upstream socket timeout (default 2000)
+- `--dns-assign-ipv4 <addr[,addr]>` IPv4 addresses pushed to adapters (default `127.0.0.1`)
+- `--dns-assign-ipv6 <addr[,addr]>` IPv6 addresses pushed to adapters (default `::1`)
 
 ### Example (Blacklist)
 
@@ -100,15 +103,15 @@ Entries in `whitelist.txt` are the only domains that will resolve; all others wi
    - Alternate DNS server: leave blank or set to another resolver.
 6. Repeat for **Internet Protocol Version 6 (TCP/IPv6)** if needed (use `::1`).
 
-**PowerShell alternative:**
+**PowerShell / netsh alternative:**
 
 ```powershell
-InterfaceAlias="Ethernet"
-Set-DnsClientServerAddress -InterfaceAlias $InterfaceAlias -ServerAddresses 127.0.0.1
-Set-DnsClientServerAddress -InterfaceAlias $InterfaceAlias -ServerAddresses ::1 -AddressFamily IPv6
+$InterfaceAlias="Ethernet"
+netsh interface ipv4 add dnsserver $InterfaceAlias address=127.0.0.1 index=1
+netsh interface ipv6 add dnsserver $InterfaceAlias address=::1 index=1
 ```
 
-Restore defaults later with `Set-DnsClientServerAddress -InterfaceAlias $InterfaceAlias -ResetServerAddresses`.
+Revert to DHCP later with `netsh interface ipv4 set dnsservers $InterfaceAlias source=dhcp` (repeat for IPv6).
 
 ### Linux (systemd-resolved)
 
@@ -123,6 +126,23 @@ Replace `eth0` with your interface. For traditional `/etc/resolv.conf`, edit the
 nameserver 127.0.0.1
 nameserver ::1
 ```
+
+## Windows DNS Assignment Automation
+
+On Windows, the proxy can reconfigure adapter DNS settings for you via `netsh interface ipv4/ipv6 add dnsserver`. At startup you will be asked whether to auto-configure the default `Ethernet` and `Wi-Fi` adapters or to choose adapters manually. The addresses pushed to each adapter come from `--dns-assign-ipv4` / `--dns-assign-ipv6` (defaults: `127.0.0.1` / `::1`).
+
+Each adapter touched during the session is tracked and automatically reverted to DHCP (IPv4 + IPv6) when the process exits, so temporary overrides do not persist accidentally.
+
+You can revisit the same workflow at runtime via the interactive console:
+
+```
+dns auto     # apply to Ethernet/Wi-Fi
+dns list     # show adapters discovered via GetAdaptersAddresses
+dns select   # interactively choose adapters to update
+dns set <alias>
+```
+
+All automation shells out to `netsh`, so run the proxy from an elevated PowerShell terminal when modifying adapter settings.
 
 ## Verification
 
@@ -155,13 +175,17 @@ blacklist list
 whitelist add trusted.example
 whitelist remove trusted.example
 whitelist list
+dns auto
+dns list
+dns select
+dns set "<adapter name>"
 ```
 
 Added and removed domains are normalized, persisted to `blacklist.txt` / `whitelist.txt`, and applied to new queries immediately. Sinkholed domains are recorded in `black_logs.txt`, while queries permitted by the whitelist are written to `white_logs.txt`.
 
 ## Troubleshooting
-
 - **Permission denied / bind errors**: run with Administrator/root privileges or choose an unprivileged port via `--port`.
 - **No IPv6 connectivity**: disable IPv6 binding with `--bind-ipv6 none` or remove IPv6 upstreams.
 - **Rules not applied**: ensure the file path is correct and entries are lowercase without trailing dots; wildcard domains should use `*.example.com`.
 - **Fallback behavior**: whitelist mode with an empty list blocks everything (warning emitted at startup). Ensure upstream resolvers are reachable.
+

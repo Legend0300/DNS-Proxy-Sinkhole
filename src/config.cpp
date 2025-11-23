@@ -75,6 +75,8 @@ void print_usage() {
                  "  --bind-ipv6 <address|none>\n"
                  "  --port <number>\n"
                  "  --timeout-ms <milliseconds>\n"
+                 "  --dns-assign-ipv4 <address[,address]>\n"
+                 "  --dns-assign-ipv6 <address[,address]>\n"
                  "  --black-log <path>\n"
                  "  --white-log <path>\n"
                  "  --upstream <host[:port]>\n"
@@ -147,6 +149,16 @@ ServerConfig parse_arguments(int argc, char** argv) {
                 throw std::invalid_argument("--timeout-ms requires a value");
             }
             config.socketTimeoutMs = parse_timeout(argv[++i]);
+        } else if (arg == "--dns-assign-ipv4") {
+            if (i + 1 >= argc) {
+                throw std::invalid_argument("--dns-assign-ipv4 requires a value");
+            }
+            config.dnsAssignIPv4 = argv[++i];
+        } else if (arg == "--dns-assign-ipv6") {
+            if (i + 1 >= argc) {
+                throw std::invalid_argument("--dns-assign-ipv6 requires a value");
+            }
+            config.dnsAssignIPv6 = argv[++i];
         } else if (arg == "--black-log") {
             if (i + 1 >= argc) {
                 throw std::invalid_argument("--black-log requires a value");
