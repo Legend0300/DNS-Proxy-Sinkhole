@@ -305,6 +305,7 @@ async function loadAdapters() {
                 <td style="padding: 10px;">${adapter.alias}</td>
                 <td style="padding: 10px;">${adapter.description}</td>
                 <td style="padding: 10px;"><span style="color: ${statusColor};">●</span> ${adapter.isUp ? 'Up' : 'Down'}</td>
+                <td style="padding: 10px; font-family: monospace;">${adapter.dnsServers || '-'}</td>
                 <td style="padding: 10px;">
                     <button class="btn-small" onclick="setAdapterDns('${adapter.alias}')" style="margin-right: 5px; background-color: #2196F3; color: white; border: none; padding: 5px 10px; cursor: pointer; border-radius: 3px;">Set DNS</button>
                     <button class="btn-small" onclick="resetAdapterDns('${adapter.alias}')" style="background-color: #FF9800; color: white; border: none; padding: 5px 10px; cursor: pointer; border-radius: 3px;">Reset DHCP</button>

@@ -202,7 +202,7 @@ void cleanup_dns_assignments() {
 std::vector<NetworkInterfaceInfo> enumerate_windows_interfaces() {
     std::vector<NetworkInterfaceInfo> result;
     ULONG bufferLength = 0;
-    ULONG flags = GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_DNS_SERVER;
+    ULONG flags = GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_ANYCAST;
     if (GetAdaptersAddresses(AF_UNSPEC, flags, nullptr, nullptr, &bufferLength) != ERROR_BUFFER_OVERFLOW) {
         return result;
     }
@@ -219,6 +219,34 @@ std::vector<NetworkInterfaceInfo> enumerate_windows_interfaces() {
         info.alias = wide_to_utf8(std::wstring_view(adapter->FriendlyName));
         info.description = adapter->Description ? wide_to_utf8(std::wstring_view(adapter->Description)) : "";
         info.isUp = adapter->OperStatus == IfOperStatusUp;
+
+        std::vector<std::string> dnsList;
+        for (auto dns = adapter->FirstDnsServerAddress; dns != nullptr; dns = dns->Next) {
+            char ipStr[INET6_ADDRSTRLEN] = {0};
+            void* addrPtr = nullptr;
+            if (dns->Address.lpSockaddr->sa_family == AF_INET) {
+                addrPtr = &reinterpret_cast<sockaddr_in*>(dns->Address.lpSockaddr)->sin_addr;
+                inet_ntop(AF_INET, addrPtr, ipStr, sizeof(ipStr));
+            } else if (dns->Address.lpSockaddr->sa_family == AF_INET6) {
+                addrPtr = &reinterpret_cast<sockaddr_in6*>(dns->Address.lpSockaddr)->sin6_addr;
+                inet_ntop(AF_INET6, addrPtr, ipStr, sizeof(ipStr));
+            }
+            if (ipStr[0] != '\0') {
+                dnsList.push_back(ipStr);
+            }
+        }
+        
+        if (dnsList.empty()) {
+            info.dnsServers = "DHCP (or None)";
+        } else {
+            std::ostringstream oss;
+            for(size_t i = 0; i < dnsList.size(); ++i) {
+                if(i > 0) oss << ", ";
+                oss << dnsList[i];
+            }
+            info.dnsServers = oss.str();
+        }
+
         result.push_back(std::move(info));
     }
     std::sort(result.begin(), result.end(), [](const NetworkInterfaceInfo& a, const NetworkInterfaceInfo& b) {

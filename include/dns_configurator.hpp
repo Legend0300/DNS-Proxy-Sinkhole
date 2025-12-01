@@ -9,6 +9,7 @@ struct NetworkInterfaceInfo {
     std::string alias;
     std::string description;
     bool isUp = false;
+    std::string dnsServers;
 };
 
 std::vector<NetworkInterfaceInfo> enumerate_network_interfaces();

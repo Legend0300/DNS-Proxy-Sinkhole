@@ -582,7 +582,8 @@ void DnsServer::setup_http_routes() {
             oss << "{";
             oss << "\"alias\": \"" << json_escape(adapters[i].alias) << "\",";
             oss << "\"description\": \"" << json_escape(adapters[i].description) << "\",";
-            oss << "\"isUp\": " << (adapters[i].isUp ? "true" : "false");
+            oss << "\"isUp\": " << (adapters[i].isUp ? "true" : "false") << ",";
+            oss << "\"dnsServers\": \"" << json_escape(adapters[i].dnsServers) << "\"";
             oss << "}";
             if (i < adapters.size() - 1) oss << ",";
         }
