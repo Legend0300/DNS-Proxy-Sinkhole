@@ -108,6 +108,29 @@ bool RuleSet::remove_from_blacklist(std::string_view hostname) {
     return true;
 }
 
+void RuleSet::clear_blacklist() {
+    std::unique_lock lock(mutex_);
+    blacklist_.clear();
+    persist_locked(blacklistPath_, blacklist_);
+}
+
+int RuleSet::add_to_blacklist_bulk(const std::vector<std::string>& domains) {
+    std::unique_lock lock(mutex_);
+    int added = 0;
+    for (const auto& domain : domains) {
+        auto normalized = normalize_hostname(domain);
+        if (!normalized.empty()) {
+            if (insert_entry(blacklist_, std::move(normalized))) {
+                added++;
+            }
+        }
+    }
+    if (added > 0) {
+        persist_locked(blacklistPath_, blacklist_);
+    }
+    return added;
+}
+
 bool RuleSet::add_to_whitelist(std::string_view hostname) {
     auto normalized = normalize_hostname(hostname);
     if (normalized.empty()) {
@@ -132,6 +155,29 @@ bool RuleSet::remove_from_whitelist(std::string_view hostname) {
     }
     persist_locked(whitelistPath_, whitelist_);
     return true;
+}
+
+void RuleSet::clear_whitelist() {
+    std::unique_lock lock(mutex_);
+    whitelist_.clear();
+    persist_locked(whitelistPath_, whitelist_);
+}
+
+int RuleSet::add_to_whitelist_bulk(const std::vector<std::string>& domains) {
+    std::unique_lock lock(mutex_);
+    int added = 0;
+    for (const auto& domain : domains) {
+        auto normalized = normalize_hostname(domain);
+        if (!normalized.empty()) {
+            if (insert_entry(whitelist_, std::move(normalized))) {
+                added++;
+            }
+        }
+    }
+    if (added > 0) {
+        persist_locked(whitelistPath_, whitelist_);
+    }
+    return added;
 }
 
 std::vector<std::string> RuleSet::list_blacklist() const {

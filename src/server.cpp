@@ -16,6 +16,7 @@
 #include <sstream>
 #include <iomanip>
 #include <ctime>
+#include <regex>
 
 #ifdef _WIN32
 #define NOMINMAX
@@ -153,8 +154,10 @@ std::string trim_copy(std::string_view value) {
 } // namespace
 
 DnsServer::DnsServer(ServerConfig config, RuleSet&& rules)
-    : config_(std::move(config)), rules_(std::move(rules)) {
+    : config_(std::move(config)), rules_(std::move(rules)), httpServer_(config_.apiPort) {
+    currentMode_ = config_.mode;
     open_log_files();
+    setup_http_routes();
 }
 
 DnsServer::~DnsServer() {
@@ -187,9 +190,16 @@ int DnsServer::run() {
     std::cout << "  blacklist entries: " << rules_.blacklist_size() << std::endl;
     std::cout << "  whitelist entries: " << rules_.whitelist_size() << std::endl;
     std::cout << "Listening on port " << config_.port << std::endl;
-    std::cout << "Type 'help' for runtime commands." << std::endl;
+    std::cout << "API Server listening on port " << config_.apiPort << std::endl;
+    
+    httpServer_.run();
 
-    control_loop();
+    // Keep running until signaled
+    while (running_) {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+
+    httpServer_.stop();
 
     for (auto& thread : threads_) {
         thread.join();
@@ -297,6 +307,261 @@ void DnsServer::start_tcp_listener(const std::string& bindAddr, int family) {
     std::cout << "TCP listening on " << bindAddr << ":" << config_.port << std::endl;
 
     threads_.emplace_back(&DnsServer::tcp_loop, this, SocketHandle{from_native(socketFd), family});
+}
+
+void DnsServer::setup_http_routes() {
+    // GET /
+    httpServer_.register_handler("GET", "/", [this](const HttpRequest& req) {
+        HttpResponse resp;
+        resp.body = "{\"message\": \"DNS Proxy API\", \"endpoints\": [\"/stats\", \"/blacklist\", \"/whitelist\"]}";
+        return resp;
+    });
+
+    // GET /stats
+    httpServer_.register_handler("GET", "/stats", [this](const HttpRequest& req) {
+        HttpResponse resp;
+        std::ostringstream oss;
+        oss << "{";
+        oss << "\"blacklist_count\": " << rules_.blacklist_size() << ",";
+        oss << "\"whitelist_count\": " << rules_.whitelist_size();
+        oss << "}";
+        resp.body = oss.str();
+        return resp;
+    });
+
+    // GET /blacklist
+    httpServer_.register_handler("GET", "/blacklist", [this](const HttpRequest& req) {
+        HttpResponse resp;
+        auto list = rules_.list_blacklist();
+        std::ostringstream oss;
+        oss << "[";
+        for (size_t i = 0; i < list.size(); ++i) {
+            oss << "\"" << list[i] << "\"";
+            if (i < list.size() - 1) oss << ",";
+        }
+        oss << "]";
+        resp.body = oss.str();
+        return resp;
+    });
+
+    // POST /blacklist
+    httpServer_.register_handler("POST", "/blacklist", [this](const HttpRequest& req) {
+        HttpResponse resp;
+        std::regex re("\"domain\"\\s*:\\s*\"([^\"]+)\"");
+        std::smatch match;
+        if (std::regex_search(req.body, match, re) && match.size() > 1) {
+            std::string domain = match[1].str();
+            if (rules_.add_to_blacklist(domain)) {
+                resp.body = "{\"status\": \"added\", \"domain\": \"" + domain + "\"}";
+            } else {
+                resp.status = 400;
+                resp.body = "{\"error\": \"Already exists or invalid\"}";
+            }
+        } else {
+            resp.status = 400;
+            resp.body = "{\"error\": \"Invalid JSON\"}";
+        }
+        return resp;
+    });
+
+    // DELETE /blacklist
+    httpServer_.register_handler("DELETE", "/blacklist", [this](const HttpRequest& req) {
+        HttpResponse resp;
+        std::regex re("\"domain\"\\s*:\\s*\"([^\"]+)\"");
+        std::smatch match;
+        if (std::regex_search(req.body, match, re) && match.size() > 1) {
+            std::string domain = match[1].str();
+            if (rules_.remove_from_blacklist(domain)) {
+                resp.body = "{\"status\": \"removed\", \"domain\": \"" + domain + "\"}";
+            } else {
+                resp.status = 404;
+                resp.body = "{\"error\": \"Not found\"}";
+            }
+        } else {
+            resp.status = 400;
+            resp.body = "{\"error\": \"Invalid JSON\"}";
+        }
+        return resp;
+    });
+
+    // POST /reload
+    httpServer_.register_handler("POST", "/reload", [this](const HttpRequest& req) {
+        rules_.reload();
+        HttpResponse resp;
+        resp.body = "{\"status\": \"reloaded\"}";
+        return resp;
+    });
+
+    // DELETE /blacklist/all
+    httpServer_.register_handler("DELETE", "/blacklist/all", [this](const HttpRequest& req) {
+        rules_.clear_blacklist();
+        HttpResponse resp;
+        resp.body = "{\"status\": \"cleared\"}";
+        return resp;
+    });
+
+    // POST /blacklist/bulk
+    httpServer_.register_handler("POST", "/blacklist/bulk", [this](const HttpRequest& req) {
+        HttpResponse resp;
+        std::vector<std::string> domains;
+        std::regex re("\"([^\"]+)\"");
+        auto words_begin = std::sregex_iterator(req.body.begin(), req.body.end(), re);
+        auto words_end = std::sregex_iterator();
+
+        for (std::sregex_iterator i = words_begin; i != words_end; ++i) {
+            std::smatch match = *i;
+            std::string match_str = match.str();
+            // Remove quotes
+            if (match_str.size() >= 2) {
+                domains.push_back(match_str.substr(1, match_str.size() - 2));
+            }
+        }
+        
+        // Filter out keys like "domains" if the user sends {"domains": ["a", "b"]}
+        // This regex is a bit loose, it matches all quoted strings.
+        // A better way is to look for the array content.
+        // For simplicity, let's assume the body is just a JSON array of strings: ["a.com", "b.com"]
+        
+        // Refined parsing for ["a", "b"]
+        domains.clear();
+        size_t start = req.body.find('[');
+        size_t end = req.body.rfind(']');
+        if (start != std::string::npos && end != std::string::npos && end > start) {
+            std::string content = req.body.substr(start + 1, end - start - 1);
+            std::regex item_re("\"([^\"]+)\"");
+            auto begin = std::sregex_iterator(content.begin(), content.end(), item_re);
+            for (auto i = begin; i != std::sregex_iterator(); ++i) {
+                domains.push_back((*i)[1].str());
+            }
+        }
+
+        int added = rules_.add_to_blacklist_bulk(domains);
+        std::ostringstream oss;
+        oss << "{\"status\": \"added\", \"count\": " << added << "}";
+        resp.body = oss.str();
+        return resp;
+    });
+
+    // GET /whitelist
+    httpServer_.register_handler("GET", "/whitelist", [this](const HttpRequest& req) {
+        HttpResponse resp;
+        auto list = rules_.list_whitelist();
+        std::ostringstream oss;
+        oss << "[";
+        for (size_t i = 0; i < list.size(); ++i) {
+            oss << "\"" << list[i] << "\"";
+            if (i < list.size() - 1) oss << ",";
+        }
+        oss << "]";
+        resp.body = oss.str();
+        return resp;
+    });
+
+    // POST /whitelist
+    httpServer_.register_handler("POST", "/whitelist", [this](const HttpRequest& req) {
+        HttpResponse resp;
+        std::regex re("\"domain\"\\s*:\\s*\"([^\"]+)\"");
+        std::smatch match;
+        if (std::regex_search(req.body, match, re) && match.size() > 1) {
+            std::string domain = match[1].str();
+            if (rules_.add_to_whitelist(domain)) {
+                resp.body = "{\"status\": \"added\", \"domain\": \"" + domain + "\"}";
+            } else {
+                resp.status = 400;
+                resp.body = "{\"error\": \"Already exists or invalid\"}";
+            }
+        } else {
+            resp.status = 400;
+            resp.body = "{\"error\": \"Invalid JSON\"}";
+        }
+        return resp;
+    });
+
+    // DELETE /whitelist
+    httpServer_.register_handler("DELETE", "/whitelist", [this](const HttpRequest& req) {
+        HttpResponse resp;
+        std::regex re("\"domain\"\\s*:\\s*\"([^\"]+)\"");
+        std::smatch match;
+        if (std::regex_search(req.body, match, re) && match.size() > 1) {
+            std::string domain = match[1].str();
+            if (rules_.remove_from_whitelist(domain)) {
+                resp.body = "{\"status\": \"removed\", \"domain\": \"" + domain + "\"}";
+            } else {
+                resp.status = 404;
+                resp.body = "{\"error\": \"Not found\"}";
+            }
+        } else {
+            resp.status = 400;
+            resp.body = "{\"error\": \"Invalid JSON\"}";
+        }
+        return resp;
+    });
+    // DELETE /whitelist/all
+    httpServer_.register_handler("DELETE", "/whitelist/all", [this](const HttpRequest& req) {
+        rules_.clear_whitelist();
+        HttpResponse resp;
+        resp.body = "{\"status\": \"cleared\"}";
+        return resp;
+    });
+
+    // POST /whitelist/bulk
+    httpServer_.register_handler("POST", "/whitelist/bulk", [this](const HttpRequest& req) {
+        HttpResponse resp;
+        std::vector<std::string> domains;
+        size_t start = req.body.find('[');
+        size_t end = req.body.rfind(']');
+        if (start != std::string::npos && end != std::string::npos && end > start) {
+            std::string content = req.body.substr(start + 1, end - start - 1);
+            std::regex item_re("\"([^\"]+)\"");
+            auto begin = std::sregex_iterator(content.begin(), content.end(), item_re);
+            for (auto i = begin; i != std::sregex_iterator(); ++i) {
+                domains.push_back((*i)[1].str());
+            }
+        }
+
+        int added = rules_.add_to_whitelist_bulk(domains);
+        std::ostringstream oss;
+        oss << "{\"status\": \"added\", \"count\": " << added << "}";
+        resp.body = oss.str();
+        return resp;
+    });
+
+    // GET /mode
+    httpServer_.register_handler("GET", "/mode", [this](const HttpRequest& req) {
+        HttpResponse resp;
+        std::string modeStr = (currentMode_ == FilterMode::Blacklist) ? "blacklist" : "whitelist";
+        resp.body = "{\"mode\": \"" + modeStr + "\"}";
+        return resp;
+    });
+
+    // POST /mode
+    httpServer_.register_handler("POST", "/mode", [this](const HttpRequest& req) {
+        HttpResponse resp;
+        if (req.body.find("blacklist") != std::string::npos) {
+            currentMode_ = FilterMode::Blacklist;
+            resp.body = "{\"status\": \"updated\", \"mode\": \"blacklist\"}";
+        } else if (req.body.find("whitelist") != std::string::npos) {
+            currentMode_ = FilterMode::Whitelist;
+            resp.body = "{\"status\": \"updated\", \"mode\": \"whitelist\"}";
+        } else {
+            resp.status = 400;
+            resp.body = "{\"error\": \"Invalid mode. Use 'blacklist' or 'whitelist'\"}";
+        }
+        return resp;
+    });
+
+    // POST /flushdns
+    httpServer_.register_handler("POST", "/flushdns", [this](const HttpRequest& req) {
+        HttpResponse resp;
+#ifdef _WIN32
+        system("ipconfig /flushdns");
+        resp.body = "{\"status\": \"flushed\"}";
+#else
+        resp.status = 501;
+        resp.body = "{\"error\": \"Not implemented on non-Windows\"}";
+#endif
+        return resp;
+    });
 }
 
 void DnsServer::udp_loop(SocketHandle handle) {
@@ -412,7 +677,7 @@ std::optional<std::vector<std::uint8_t>> DnsServer::process_query(const std::vec
         return build_servfail_response(request);
     }
 
-    auto action = rules_.evaluate(config_.mode, question.name);
+    auto action = rules_.evaluate(currentMode_, question.name);
     if (action == RuleAction::SinkholeBlacklist) {
         log_sinkhole(question.name, "blacklist");
         return build_sinkhole_response(request, question, config_);

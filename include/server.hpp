@@ -13,6 +13,7 @@
 
 #include "config.hpp"
 #include "rules.hpp"
+#include "http_server.hpp"
 
 class DnsServer {
 public:
@@ -36,6 +37,8 @@ private:
     void tcp_loop(SocketHandle handle);
 
     void handle_tcp_client(SocketHandle client);
+
+    void setup_http_routes();
 
     std::optional<std::vector<std::uint8_t>> process_query(const std::vector<std::uint8_t>& request,
                                                            bool preferTcp);
@@ -61,10 +64,13 @@ private:
     static std::string make_timestamp();
 
     ServerConfig config_;
+    std::atomic<FilterMode> currentMode_; // Thread-safe mode
     RuleSet rules_;
     std::vector<std::thread> threads_;
     std::atomic<bool> running_{true};
     mutable std::mutex logMutex_;
     std::ofstream blackLog_;
     std::ofstream whiteLog_;
+
+    HttpServer httpServer_{8080}; // Default port, can be changed in config
 };
