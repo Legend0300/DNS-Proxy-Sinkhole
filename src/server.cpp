@@ -151,6 +151,28 @@ std::string trim_copy(std::string_view value) {
     return std::string(value.substr(begin, end - begin + 1));
 }
 
+std::string json_escape(const std::string& s) {
+    std::ostringstream o;
+    for (char c : s) {
+        switch (c) {
+            case '"': o << "\\\""; break;
+            case '\\': o << "\\\\"; break;
+            case '\b': o << "\\b"; break;
+            case '\f': o << "\\f"; break;
+            case '\n': o << "\\n"; break;
+            case '\r': o << "\\r"; break;
+            case '\t': o << "\\t"; break;
+            default:
+                if ('\x00' <= c && c <= '\x1f') {
+                    o << "\\u" << std::hex << std::setw(4) << std::setfill('0') << static_cast<int>(c);
+                } else {
+                    o << c;
+                }
+        }
+    }
+    return o.str();
+}
+
 } // namespace
 
 DnsServer::DnsServer(ServerConfig config, RuleSet&& rules)
@@ -558,8 +580,8 @@ void DnsServer::setup_http_routes() {
         oss << "[";
         for (size_t i = 0; i < adapters.size(); ++i) {
             oss << "{";
-            oss << "\"alias\": \"" << adapters[i].alias << "\",";
-            oss << "\"description\": \"" << adapters[i].description << "\",";
+            oss << "\"alias\": \"" << json_escape(adapters[i].alias) << "\",";
+            oss << "\"description\": \"" << json_escape(adapters[i].description) << "\",";
             oss << "\"isUp\": " << (adapters[i].isUp ? "true" : "false");
             oss << "}";
             if (i < adapters.size() - 1) oss << ",";
