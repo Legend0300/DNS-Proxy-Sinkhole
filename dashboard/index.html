@@ -13,6 +13,7 @@
                 <li onclick="showTab('dashboard')" class="active" id="nav-dashboard">Dashboard</li>
                 <li onclick="showTab('blacklist')" id="nav-blacklist">Blacklist</li>
                 <li onclick="showTab('whitelist')" id="nav-whitelist">Whitelist</li>
+                <li onclick="showTab('adapters')" id="nav-adapters">Adapters</li>
             </ul>
             <div class="status-indicator">
                 <span id="connection-status" class="status-dot disconnected"></span>
@@ -94,6 +95,30 @@
                     <ul id="whitelist-list" class="domain-list">
                         <!-- Items will be populated here -->
                     </ul>
+                </div>
+            </div>
+
+            <!-- Adapters Tab -->
+            <div id="tab-adapters" class="tab-content">
+                <h1>Network Adapters</h1>
+                <div class="actions-bar">
+                    <button class="btn-primary" onclick="autoDetectAdapters()">Auto Detect & Configure</button>
+                    <button class="btn-secondary" onclick="loadAdapters()">Refresh List</button>
+                </div>
+                <div class="list-container">
+                    <table class="adapters-table" style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="text-align: left; border-bottom: 1px solid #444;">
+                                <th style="padding: 10px;">Name</th>
+                                <th style="padding: 10px;">Description</th>
+                                <th style="padding: 10px;">Status</th>
+                                <th style="padding: 10px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adapters-list">
+                            <!-- Items will be populated here -->
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </main>

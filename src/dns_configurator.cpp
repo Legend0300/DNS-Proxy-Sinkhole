@@ -419,3 +419,15 @@ void prompt_dns_assignment(const ServerConfig& config) {
     (void)config;
 #endif
 }
+
+bool reset_dns_to_dhcp(const std::string& alias) {
+#ifdef _WIN32
+    bool success = true;
+    if (!set_dns_source_dhcp(alias, false)) success = false;
+    if (!set_dns_source_dhcp(alias, true)) success = false;
+    return success;
+#else
+    (void)alias;
+    return false;
+#endif
+}

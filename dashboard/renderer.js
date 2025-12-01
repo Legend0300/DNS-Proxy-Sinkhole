@@ -50,6 +50,8 @@ async function refreshAll() {
         updateList('blacklist');
     } else if (currentTab === 'whitelist') {
         updateList('whitelist');
+    } else if (currentTab === 'adapters') {
+        loadAdapters();
     }
 }
 
@@ -281,5 +283,104 @@ window.onclick = function(event) {
     const modal = document.getElementById('bulk-modal');
     if (event.target == modal) {
         closeBulkModal();
+    }
+}
+
+async function loadAdapters() {
+    try {
+        const res = await fetch(`${API_BASE}/adapters`);
+        if (!res.ok) throw new Error('Failed to fetch adapters');
+        const adapters = await res.json();
+        
+        const tbody = document.getElementById('adapters-list');
+        tbody.innerHTML = '';
+        
+        adapters.forEach(adapter => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid #333';
+            
+            const statusColor = adapter.isUp ? '#4caf50' : '#f44336';
+            
+            tr.innerHTML = `
+                <td style="padding: 10px;">${adapter.alias}</td>
+                <td style="padding: 10px;">${adapter.description}</td>
+                <td style="padding: 10px;"><span style="color: ${statusColor};">●</span> ${adapter.isUp ? 'Up' : 'Down'}</td>
+                <td style="padding: 10px;">
+                    <button class="btn-small" onclick="setAdapterDns('${adapter.alias}')" style="margin-right: 5px; background-color: #2196F3; color: white; border: none; padding: 5px 10px; cursor: pointer; border-radius: 3px;">Set DNS</button>
+                    <button class="btn-small" onclick="resetAdapterDns('${adapter.alias}')" style="background-color: #FF9800; color: white; border: none; padding: 5px 10px; cursor: pointer; border-radius: 3px;">Reset DHCP</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (e) {
+        console.error('Error loading adapters', e);
+        showToast('Failed to load adapters', true);
+    }
+}
+
+async function setAdapterDns(alias) {
+    if (!confirm(`Set DNS to 127.0.0.1 for "${alias}"?`)) return;
+    
+    try {
+        const res = await fetch(`${API_BASE}/adapters/dns`, {
+            method: 'POST',
+            body: JSON.stringify({ adapter: alias, action: 'set_localhost' })
+        });
+        
+        if (res.ok) {
+            showToast(`DNS set for ${alias}`);
+        } else {
+            showToast('Failed to set DNS', true);
+        }
+    } catch (e) {
+        console.error('Error setting DNS', e);
+        showToast('Error setting DNS', true);
+    }
+}
+
+async function resetAdapterDns(alias) {
+    if (!confirm(`Reset DNS to DHCP for "${alias}"?`)) return;
+    
+    try {
+        const res = await fetch(`${API_BASE}/adapters/dns`, {
+            method: 'POST',
+            body: JSON.stringify({ adapter: alias, action: 'reset_dhcp' })
+        });
+        
+        if (res.ok) {
+            showToast(`DNS reset for ${alias}`);
+        } else {
+            showToast('Failed to reset DNS', true);
+        }
+    } catch (e) {
+        console.error('Error resetting DNS', e);
+        showToast('Error resetting DNS', true);
+    }
+}
+
+async function autoDetectAdapters() {
+    try {
+        const res = await fetch(`${API_BASE}/adapters`);
+        if (!res.ok) throw new Error('Failed to fetch adapters');
+        const adapters = await res.json();
+        
+        const candidates = adapters.filter(a => 
+            /ethernet|wi-?fi/i.test(a.alias) || /ethernet|wi-?fi/i.test(a.description)
+        );
+        
+        if (candidates.length === 0) {
+            alert('No Ethernet or Wi-Fi adapters detected.');
+            return;
+        }
+        
+        const names = candidates.map(c => c.alias).join(', ');
+        if (confirm(`Detected adapters: ${names}.\n\nApply DNS settings to these adapters?`)) {
+            for (const c of candidates) {
+                await setAdapterDns(c.alias);
+            }
+        }
+    } catch (e) {
+        console.error('Error auto-detecting', e);
+        showToast('Error auto-detecting adapters', true);
     }
 }

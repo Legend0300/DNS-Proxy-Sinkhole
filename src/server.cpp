@@ -550,6 +550,63 @@ void DnsServer::setup_http_routes() {
         return resp;
     });
 
+    // GET /adapters
+    httpServer_.register_handler("GET", "/adapters", [this](const HttpRequest& req) {
+        HttpResponse resp;
+        auto adapters = enumerate_network_interfaces();
+        std::ostringstream oss;
+        oss << "[";
+        for (size_t i = 0; i < adapters.size(); ++i) {
+            oss << "{";
+            oss << "\"alias\": \"" << adapters[i].alias << "\",";
+            oss << "\"description\": \"" << adapters[i].description << "\",";
+            oss << "\"isUp\": " << (adapters[i].isUp ? "true" : "false");
+            oss << "}";
+            if (i < adapters.size() - 1) oss << ",";
+        }
+        oss << "]";
+        resp.body = oss.str();
+        return resp;
+    });
+
+    // POST /adapters/dns
+    httpServer_.register_handler("POST", "/adapters/dns", [this](const HttpRequest& req) {
+        HttpResponse resp;
+        std::regex re_adapter("\"adapter\"\\s*:\\s*\"([^\"]+)\"");
+        std::regex re_action("\"action\"\\s*:\\s*\"([^\"]+)\"");
+        std::smatch match_adapter;
+        std::smatch match_action;
+        
+        if (std::regex_search(req.body, match_adapter, re_adapter) && 
+            std::regex_search(req.body, match_action, re_action)) {
+            
+            std::string adapter = match_adapter[1].str();
+            std::string action = match_action[1].str();
+            
+            bool success = false;
+            if (action == "set_localhost") {
+                success = configure_dns_for_alias(config_, adapter);
+            } else if (action == "reset_dhcp") {
+                success = reset_dns_to_dhcp(adapter);
+            } else {
+                resp.status = 400;
+                resp.body = "{\"error\": \"Invalid action\"}";
+                return resp;
+            }
+            
+            if (success) {
+                resp.body = "{\"status\": \"success\", \"adapter\": \"" + adapter + "\", \"action\": \"" + action + "\"}";
+            } else {
+                resp.status = 500;
+                resp.body = "{\"error\": \"Failed to apply settings\"}";
+            }
+        } else {
+            resp.status = 400;
+            resp.body = "{\"error\": \"Invalid JSON\"}";
+        }
+        return resp;
+    });
+
     // POST /flushdns
     httpServer_.register_handler("POST", "/flushdns", [this](const HttpRequest& req) {
         HttpResponse resp;
