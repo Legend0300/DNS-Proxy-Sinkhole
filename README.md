@@ -1,191 +1,153 @@
-# DNS Proxy Sinkhole
+# App Gate - DNS Proxy Sinkhole
 
-A cross-platform DNS proxy written in modern C++ that can operate in two filtering modes:
-
-- **Blacklist mode**: forwards all queries except those listed in a rule file; matching domains are sinkholed to configurable IPv4/IPv6 addresses.
-- **Whitelist mode**: sinkholes every domain except those explicitly allowed in the rule file.
-
-The proxy listens on both IPv4 and IPv6, relays queries to upstream resolvers over UDP/TCP, retries TCP on truncated responses, and synthesizes responses locally for sinkholed domains.
+App Gate is a high-performance DNS Proxy Sinkhole designed to filter DNS traffic based on customizable blacklist and whitelist rules. It features a robust C++ backend with a custom REST API and a modern Electron-based dashboard for real-time management.
 
 ## Features
 
-- IPv4/IPv6 dual-stack listeners with optional per-family binding control.
-- Configurable blacklist or whitelist filtering.
-- Sinkhole responses for A/AAAA records with fallback NXDOMAIN for other types.
-- Hosts-style rule parser (supports wildcards via `*.example.com`).
-- Upstream retry strategy with UDP first, TCP fallback, and truncation handling.
-- Cross-platform socket abstraction (Windows Winsock, POSIX sockets).
-- Interactive runtime management of blacklist/whitelist entries with automatic persistence.
-- Windows-specific automation for DNS adapter assignment, including startup prompts and runtime commands.
+*   **DNS Filtering:** Blocks or allows domains based on configurable rules.
+*   **Dual Modes:** Switch between **Blacklist Mode** (block specific domains) and **Whitelist Mode** (allow only specific domains).
+*   **REST API:** Fully functional HTTP REST API for managing rules and server state programmatically.
+*   **Real-time Dashboard:** Electron-based GUI for easy management of domains, modes, and system stats.
+*   **Bulk Operations:** Add or remove multiple domains at once.
+*   **System Integration:** Includes utilities to flush system DNS cache (Windows only).
+*   **High Performance:** Built with C++20 using native sockets (Winsock2 on Windows).
 
-## Prerequisites
-
-- CMake 3.16+
-- A C++20-compatible compiler (MSVC 19.3+, GCC 11+, or Clang 13+)
-- Administrator/root privileges to bind to port 53
-- Visual Studio 2022 (Windows) or build-essential (Linux)
-
-## Build Instructions
-
-### Windows (PowerShell)
-
-```powershell
-cmake -S . -B build -G "Visual Studio 17 2022"
-cmake --build build --config Release
-```
-
-On Visual Studio generators replace the first command with `cmake -S . -B build -G "Visual Studio 17 2022"` and build via `cmake --build build --config Release`.
-
-### Linux
-
-```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-```
-
-The resulting executable is `build/dns_proxy` (or `build\Release\dns_proxy.exe` on Visual Studio).
-
-## Running the Proxy
-
-The proxy exposes several CLI switches. Run `dns_proxy --help` for the full list.
-
-Common flags:
-
-- `--mode <blacklist|whitelist>` (default: `blacklist`)
-- `--list-file <path>` domain list file (one domain per line; hosts format accepted)
-- `--sinkhole-ipv4 <addr>` IPv4 sinkhole target (default `0.0.0.0`)
-- `--sinkhole-ipv6 <addr>` IPv6 sinkhole target (default `::`)
-- `--bind-ipv4 <addr|none>` IPv4 bind address (`none` disables IPv4 listener)
-- `--bind-ipv6 <addr|none>` IPv6 bind address (`none` disables IPv6 listener)
-- `--upstream <host[:port]>` additional upstream resolver (repeatable)
-- `--port <number>` listening port (default 53)
-- `--timeout-ms <ms>` upstream socket timeout (default 2000)
-- `--dns-assign-ipv4 <addr[,addr]>` IPv4 addresses pushed to adapters (default `127.0.0.1`)
-- `--dns-assign-ipv6 <addr[,addr]>` IPv6 addresses pushed to adapters (default `::1`)
-
-### Example (Blacklist)
-
-```powershell
-# Windows (PowerShell)
-Start-Process powershell -Verb RunAs -ArgumentList "-NoExit","-Command","cd `"C:/path/to/DNS server`"; build/dns_proxy.exe --mode blacklist --list-file blacklist.txt"
-```
-
-```bash
-# Linux
-sudo ./build/dns_proxy --mode blacklist --list-file blacklist.txt
-```
-
-Create `blacklist.txt` with entries such as:
+## Codebase Structure
 
 ```
-example.com
-*.ads.example
+DNS_server/
+├── src/                # C++ Source files
+│   ├── main.cpp        # Entry point
+│   ├── server.cpp      # Core server logic & API endpoints
+│   ├── http_server.cpp # Custom HTTP server implementation
+│   ├── rules.cpp       # Rule management logic
+│   └── ...
+├── include/            # C++ Header files
+├── dashboard/          # Electron Frontend
+│   ├── main.js         # Electron main process
+│   ├── renderer.js     # Frontend logic (API calls, UI updates)
+│   ├── index.html      # Dashboard layout
+│   └── styles.css      # Dashboard styling
+├── CMakeLists.txt      # CMake build configuration
+├── blacklist.txt       # Persistent blacklist storage
+└── whitelist.txt       # Persistent whitelist storage
 ```
 
-### Example (Whitelist)
+## Getting Started
 
-```bash
-sudo ./build/dns_proxy --mode whitelist --list-file whitelist.txt --sinkhole-ipv4 127.0.0.1
-```
+### Prerequisites
 
-Entries in `whitelist.txt` are the only domains that will resolve; all others will be sinkholed.
+*   **C++ Backend:**
+    *   CMake (3.16+)
+    *   C++ Compiler supporting C++20 (e.g., MSVC on Windows)
+*   **Frontend:**
+    *   Node.js & npm
 
-## Configuring DNS Clients
+### Building and Running the Backend (C++)
 
-### Windows 10/11
+1.  Navigate to the project root.
+2.  Create a build directory:
+    ```bash
+    mkdir build
+    cd build
+    ```
+3.  Generate build files with CMake:
+    ```bash
+    cmake ..
+    ```
+4.  Build the project:
+    ```bash
+    cmake --build . --config Release
+    ```
+5.  Run the executable (requires Administrator privileges to bind to port 53):
+    ```bash
+    .\Release\dns_proxy.exe
+    ```
+    *The server will start listening on DNS port 53 and API port 8080.*
 
-1. Open **Settings → Network & Internet**.
-2. Choose **Change adapter options**.
-3. Right-click your active adapter → **Properties**.
-4. Select **Internet Protocol Version 4 (TCP/IPv4)** → **Properties**.
-5. Choose **Use the following DNS server addresses** and set:
-   - Preferred DNS server: `127.0.0.1`
-   - Alternate DNS server: leave blank or set to another resolver.
-6. Repeat for **Internet Protocol Version 6 (TCP/IPv6)** if needed (use `::1`).
+### Running the Dashboard (Electron)
 
-**PowerShell / netsh alternative:**
+1.  Open a new terminal and navigate to the `dashboard` folder:
+    ```bash
+    cd dashboard
+    ```
+2.  Install dependencies:
+    ```bash
+    npm install
+    ```
+3.  Start the application:
+    ```bash
+    npm start
+    ```
 
-```powershell
-$InterfaceAlias="Ethernet"
-netsh interface ipv4 add dnsserver $InterfaceAlias address=127.0.0.1 index=1
-netsh interface ipv6 add dnsserver $InterfaceAlias address=::1 index=1
-```
+## REST API Documentation
 
-Revert to DHCP later with `netsh interface ipv4 set dnsservers $InterfaceAlias source=dhcp` (repeat for IPv6).
+The backend exposes a REST API on port `8080` (default).
 
-### Linux (systemd-resolved)
+### General
 
-```bash
-sudo resolvectl dns eth0 127.0.0.1 ::1
-sudo resolvectl domain eth0 "~."
-```
+*   **GET /**
+    *   Returns API information and available endpoints.
 
-Replace `eth0` with your interface. For traditional `/etc/resolv.conf`, edit the file as root and set:
+*   **GET /stats**
+    *   Returns the current count of rules in blacklist and whitelist.
 
-```
-nameserver 127.0.0.1
-nameserver ::1
-```
+*   **GET /mode**
+    *   Returns the current operation mode (`blacklist` or `whitelist`).
 
-## Windows DNS Assignment Automation
+*   **POST /mode**
+    *   Switch operation mode.
+    *   Body: `{"mode": "blacklist"}` or `{"mode": "whitelist"}`
 
-On Windows, the proxy can reconfigure adapter DNS settings for you via `netsh interface ipv4/ipv6 add dnsserver`. At startup you will be asked whether to auto-configure the default `Ethernet` and `Wi-Fi` adapters or to choose adapters manually. The addresses pushed to each adapter come from `--dns-assign-ipv4` / `--dns-assign-ipv6` (defaults: `127.0.0.1` / `::1`).
+*   **POST /reload**
+    *   Reloads rules from `blacklist.txt` and `whitelist.txt` files.
 
-Each adapter touched during the session is tracked and automatically reverted to DHCP (IPv4 + IPv6) when the process exits, so temporary overrides do not persist accidentally.
+*   **POST /flushdns**
+    *   Flushes the Windows DNS cache.
 
-You can revisit the same workflow at runtime via the interactive console:
+### Blacklist Management
 
-```
-dns auto     # apply to Ethernet/Wi-Fi
-dns list     # show adapters discovered via GetAdaptersAddresses
-dns select   # interactively choose adapters to update
-dns set <alias>
-```
+*   **GET /blacklist**
+    *   Returns all domains in the blacklist.
 
-All automation shells out to `netsh`, so run the proxy from an elevated PowerShell terminal when modifying adapter settings.
+*   **POST /blacklist**
+    *   Add a single domain.
+    *   Body: `{"domain": "example.com"}`
 
-## Verification
+*   **DELETE /blacklist**
+    *   Remove a single domain.
+    *   Body: `{"domain": "example.com"}`
 
-After launching the proxy, test DNS resolution:
+*   **POST /blacklist/bulk**
+    *   Add multiple domains.
+    *   Body: `["example.com", "ads.google.com"]`
 
-```powershell
-nslookup example.com 127.0.0.1
-nslookup example.com ::1
-```
+*   **DELETE /blacklist/all**
+    *   Clear the entire blacklist.
 
-On Linux:
+### Whitelist Management
 
-```bash
-dig example.com @127.0.0.1
-dig AAAA example.com @::1
-```
+*   **GET /whitelist**
+    *   Returns all domains in the whitelist.
 
-Sinkholed domains should return the configured sinkhole address or NXDOMAIN; permitted domains should resolve normally via upstream resolvers.
+*   **POST /whitelist**
+    *   Add a single domain.
+    *   Body: `{"domain": "trusted.com"}`
 
-## Runtime Commands
+*   **DELETE /whitelist**
+    *   Remove a single domain.
+    *   Body: `{"domain": "trusted.com"}`
 
-While the proxy is running in the foreground, you can update the filter lists without restarting. Type commands into the console where the server is running:
+*   **POST /whitelist/bulk**
+    *   Add multiple domains.
+    *   Body: `["trusted.com", "mysite.org"]`
 
-```
-help
-reload
-blacklist add example.com
-blacklist remove example.com
-blacklist list
-whitelist add trusted.example
-whitelist remove trusted.example
-whitelist list
-dns auto
-dns list
-dns select
-dns set "<adapter name>"
-```
+*   **DELETE /whitelist/all**
+    *   Clear the entire whitelist.
 
-Added and removed domains are normalized, persisted to `blacklist.txt` / `whitelist.txt`, and applied to new queries immediately. Sinkholed domains are recorded in `black_logs.txt`, while queries permitted by the whitelist are written to `white_logs.txt`.
+## Configuration
 
-## Troubleshooting
-- **Permission denied / bind errors**: run with Administrator/root privileges or choose an unprivileged port via `--port`.
-- **No IPv6 connectivity**: disable IPv6 binding with `--bind-ipv6 none` or remove IPv6 upstreams.
-- **Rules not applied**: ensure the file path is correct and entries are lowercase without trailing dots; wildcard domains should use `*.example.com`.
-- **Fallback behavior**: whitelist mode with an empty list blocks everything (warning emitted at startup). Ensure upstream resolvers are reachable.
+*   **Port:** DNS listens on port 53.
+*   **API Port:** REST API listens on port 8080.
+*   **Storage:** Rules are persisted in `blacklist.txt` and `whitelist.txt` in the executable's directory.
 
