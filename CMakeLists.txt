@@ -12,6 +12,7 @@ add_executable(dns_proxy
     src/dns_message.cpp
     src/server.cpp
     src/dns_configurator.cpp
+    src/http_server.cpp
 )
 
 target_include_directories(dns_proxy PRIVATE include)

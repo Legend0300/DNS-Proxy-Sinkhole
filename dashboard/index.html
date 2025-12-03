@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>DNS Proxy Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <nav class="sidebar">
+            <h2>DNS Proxy</h2>
+            <ul>
+                <li onclick="showTab('dashboard')" class="active" id="nav-dashboard">Dashboard</li>
+                <li onclick="showTab('blacklist')" id="nav-blacklist">Blacklist</li>
+                <li onclick="showTab('whitelist')" id="nav-whitelist">Whitelist</li>
+                <li onclick="showTab('adapters')" id="nav-adapters">Adapters</li>
+            </ul>
+            <div class="status-indicator">
+                <span id="connection-status" class="status-dot disconnected"></span>
+                <span id="status-text">Disconnected</span>
+            </div>
+        </nav>
+        <main class="content">
+            <!-- Dashboard Tab -->
+            <div id="tab-dashboard" class="tab-content active">
+                <h1>Overview</h1>
+                
+                <div class="mode-switcher-card">
+                    <h3>Current Mode</h3>
+                    <div class="toggle-container">
+                        <span id="mode-label-blacklist" class="mode-label active">Blacklist</span>
+                        <label class="switch">
+                            <input type="checkbox" id="mode-toggle" onchange="toggleMode()">
+                            <span class="slider round"></span>
+                        </label>
+                        <span id="mode-label-whitelist" class="mode-label">Whitelist</span>
+                    </div>
+                    <p class="mode-desc">
+                        <span id="mode-desc-text">Blocking only domains in the blacklist.</span>
+                    </p>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Blacklist Rules</h3>
+                        <p id="stat-blacklist">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Whitelist Rules</h3>
+                        <p id="stat-whitelist">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Server Status</h3>
+                        <p class="online">Running</p>
+                    </div>
+                </div>
+
+                <div class="system-actions">
+                    <button class="btn-warning" onclick="flushDns()">Flush System DNS</button>
+                </div>
+            </div>
+
+            <!-- Blacklist Tab -->
+            <div id="tab-blacklist" class="tab-content">
+                <h1>Blacklist Management</h1>
+                <div class="actions-bar">
+                    <button class="btn-secondary" onclick="openBulkModal('blacklist')">Bulk Add</button>
+                    <button class="btn-danger" onclick="clearAll('blacklist')">Clear All</button>
+                    <button class="btn-secondary" onclick="reloadRules()">Reload from Disk</button>
+                </div>
+                <div class="input-group">
+                    <input type="text" id="blacklist-input" placeholder="Enter domain (e.g., example.com)">
+                    <button onclick="addDomain('blacklist')">Add Domain</button>
+                </div>
+                <div class="list-container">
+                    <ul id="blacklist-list" class="domain-list">
+                        <!-- Items will be populated here -->
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Whitelist Tab -->
+            <div id="tab-whitelist" class="tab-content">
+                <h1>Whitelist Management</h1>
+                <div class="actions-bar">
+                    <button class="btn-secondary" onclick="openBulkModal('whitelist')">Bulk Add</button>
+                    <button class="btn-danger" onclick="clearAll('whitelist')">Clear All</button>
+                    <button class="btn-secondary" onclick="reloadRules()">Reload from Disk</button>
+                </div>
+                <div class="input-group">
+                    <input type="text" id="whitelist-input" placeholder="Enter domain (e.g., example.com)">
+                    <button onclick="addDomain('whitelist')">Add Domain</button>
+                </div>
+                <div class="list-container">
+                    <ul id="whitelist-list" class="domain-list">
+                        <!-- Items will be populated here -->
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Adapters Tab -->
+            <div id="tab-adapters" class="tab-content">
+                <h1>Network Adapters</h1>
+                <div class="actions-bar">
+                    <button class="btn-primary" onclick="autoDetectAdapters()">Auto Detect & Configure</button>
+                    <button class="btn-secondary" onclick="loadAdapters()">Refresh List</button>
+                </div>
+                <div class="list-container">
+                    <table class="adapters-table" style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="text-align: left; border-bottom: 1px solid #444;">
+                                <th style="padding: 10px;">Name</th>
+                                <th style="padding: 10px;">Description</th>
+                                <th style="padding: 10px;">Status</th>
+                                <th style="padding: 10px;">DNS Servers</th>
+                                <th style="padding: 10px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adapters-list">
+                            <!-- Items will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Bulk Add Modal -->
+    <div id="bulk-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeBulkModal()">&times;</span>
+            <h2>Bulk Add Domains</h2>
+            <p>Enter domains separated by newlines or commas:</p>
+            <textarea id="bulk-textarea" rows="10" placeholder="example.com&#10;test.com"></textarea>
+            <div class="modal-actions">
+                <button onclick="submitBulk()">Add Domains</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast">Action Successful</div>
+    <script src="renderer.js"></script>
+</body>
+</html>

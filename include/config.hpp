@@ -24,6 +24,7 @@ struct ServerConfig {
     std::string bindIPv4 = "0.0.0.0";
     std::string bindIPv6 = "::";
     std::uint16_t port = 53;
+    std::uint16_t apiPort = 8080;
     int socketTimeoutMs = 2000;
     std::string blackLogFile = "black_logs.txt";
     std::string whiteLogFile = "white_logs.txt";

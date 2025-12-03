@@ -1,0 +1,15 @@
+{
+  "name": "dns-proxy-dashboard",
+  "version": "1.0.0",
+  "description": "Dashboard for DNS Proxy Server",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^28.0.0"
+  }
+}

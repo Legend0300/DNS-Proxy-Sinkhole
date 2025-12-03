@@ -34,8 +34,13 @@ public:
 
     bool add_to_blacklist(std::string_view hostname);
     bool remove_from_blacklist(std::string_view hostname);
+    void clear_blacklist();
+    int add_to_blacklist_bulk(const std::vector<std::string>& domains);
+
     bool add_to_whitelist(std::string_view hostname);
     bool remove_from_whitelist(std::string_view hostname);
+    void clear_whitelist();
+    int add_to_whitelist_bulk(const std::vector<std::string>& domains);
 
     [[nodiscard]] std::vector<std::string> list_blacklist() const;
     [[nodiscard]] std::vector<std::string> list_whitelist() const;

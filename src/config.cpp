@@ -8,6 +8,12 @@
 #include <stdexcept>
 #include <string_view>
 #include <system_error>
+#include <filesystem>
+
+#ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
+#endif
 
 namespace {
 constexpr std::string_view kModeBlacklist = "blacklist";
@@ -83,10 +89,32 @@ void print_usage() {
                  "  --help\n";
 }
 
+std::string get_executable_dir() {
+#ifdef _WIN32
+    char buffer[MAX_PATH];
+    if (GetModuleFileNameA(NULL, buffer, MAX_PATH) > 0) {
+        std::filesystem::path path(buffer);
+        return path.parent_path().string();
+    }
+#endif
+    return ".";
+}
+
 } // namespace
 
 ServerConfig parse_arguments(int argc, char** argv) {
     ServerConfig config;
+
+    // Set default paths relative to executable
+    std::string exeDir = get_executable_dir();
+    if (!exeDir.empty()) {
+        std::filesystem::path dir(exeDir);
+        config.blacklistFile = (dir / "blacklist.txt").string();
+        config.whitelistFile = (dir / "whitelist.txt").string();
+        config.blackLogFile = (dir / "black_logs.txt").string();
+        config.whiteLogFile = (dir / "white_logs.txt").string();
+    }
+
     config.upstreams = {
         {"1.1.1.1", 53},
         {"1.0.0.1", 53},
